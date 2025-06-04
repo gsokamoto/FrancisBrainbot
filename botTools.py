@@ -11,14 +11,14 @@ def sql_set_event(message_id, description, title, date, time, location, location
     conn.commit()
     conn.close()
 
-def sql_update_event(message_id, description, title, date, time, location, locationurl):
+def sql_update_event(message_id, description, title, date, time, location, locationurl, completed_flag):
     conn = sqlite3.connect("events.db")
     cursor = conn.cursor()
     cursor.execute(
         "UPDATE events "
-        "SET title = ?, descr = ?, date = ?, time = ?, location = ?, location_url = ? "
+        "SET title = ?, descr = ?, date = ?, time = ?, location = ?, location_url = ?, completed_flag = ? "
         "WHERE message_id = ?",
-        (description, title, date, time, location, locationurl, message_id))
+        (description, title, date, time, location, locationurl, message_id, completed_flag))
     conn.commit()
     conn.close()
 
@@ -26,7 +26,7 @@ def sql_get_event(message_id):
     conn = sqlite3.connect("events.db")
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT message_id, title, descr, date, time, location, location_url "
+        "SELECT message_id, title, descr, date, time, location, location_url, completed_flag "
         "FROM events "
         "WHERE message_id = ?",
         (message_id,))
@@ -63,6 +63,17 @@ def sql_update_attendee_to_going(message_id, user_id):
         "SET tentative_flag = 0 "
         "WHERE message_id = ? AND user_id = ?",
         (message_id, user_id))
+    conn.commit()
+    conn.close()
+
+def sql_update_complete_event(message_id):
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE events "
+        "SET completed_flag = 1 "
+        "WHERE message_id = ?",
+        (message_id,))
     conn.commit()
     conn.close()
 

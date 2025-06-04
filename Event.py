@@ -1,13 +1,12 @@
 import discord
 from datetime import datetime
 import calendar
-import botTools
 from pytz import timezone
 import sqlite3
 
 
 class Event:
-    def __init__(self, message_id, title, description, date, time, location, locationurl="", attendees=[]):
+    def __init__(self, message_id, title, description, date, time, location, locationurl="", attendees=[], completed_flag=0):
         self.message_id = message_id
         self.title = title
         self.description = description
@@ -16,6 +15,7 @@ class Event:
         self.attendees = attendees
         self.location = location
         self.locationurl = locationurl
+        self.completed_flag = completed_flag
 
         self.message = None
         self.embed = None
@@ -26,7 +26,7 @@ class Event:
     # description: generates the event embed
     # parameters: client(client): discord client object being used,
     # return: embed
-    async def generate_event_embed(self, curr_interaction, message_id=None, title=None, description=None, date=None, time=None, location=None, locationurl=None, attendees=None):
+    async def generate_event_embed(self, curr_interaction, message_id=None, title=None, description=None, date=None, time=None, location=None, locationurl=None, attendees=None, completed_flag=None):
         if message_id is None:
             message_id = self.message_id
         else:
@@ -59,6 +59,10 @@ class Event:
             attendees = self.attendees
         else:
             self.attendees = attendees
+        if completed_flag is None:
+            completed_flag = self.completed_flag
+        else:
+            self.completed_flag = completed_flag
 
         description = description.replace("\\n", "\n")
 
@@ -88,7 +92,11 @@ class Event:
         self.embed.add_field(name=f"Attendees: ({event_count})", value="\n".join(attendee_display_names), inline=False)
         # self.embed.add_field(name="Event ID:", value=self.message_id, inline=True)
         self.embed.set_footer(text="Event ID: " + str(message_id))
-
+        if completed_flag == 1:
+            self.embed.title = self.__crossout_embed(self.embed.title)
+            self.embed.description = self.__crossout_embed(self.embed.description)
+            for idx, field in enumerate(self.embed.fields):
+                self.embed.set_field_at(index=idx, name=field.name, value=self.__crossout_embed(field.value))
 
         # tank_emoji = botTools.generate_emoji(client, "tank")
         # self.embed.add_field(name=f"{tank_emoji} TANK({len(self.tank_list)})", value="\n".join(self.tank_list), inline=True)
@@ -164,6 +172,15 @@ class Event:
         #     if member.display_name is display_name:
         #         self.members_list.remove(member)
         self.attendees.append(display_name)
+
+    def __crossout_embed(self, embed_text):
+        # self.tank_list = [x for x in self.tank_list if display_name not in x]
+        # self.dps_list = [x for x in self.dps_list if display_name not in x]
+        # self.healer_list = [x for x in self.healer_list if display_name not in x]
+        # for member in self.members_list:
+        #     if member.display_name is display_name:
+        #         self.members_list.remove(member)
+        return "~~" + embed_text + "~~"
 
     def __format_datetime(self, date, time):
         # date formatting
