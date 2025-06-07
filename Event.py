@@ -73,6 +73,8 @@ class Event:
         )
 
         event_datetime = self.__format_datetime(date, time)
+        if event_datetime is None:
+            return None
         event_relative_datetime = calendar.timegm(event_datetime.utctimetuple())
         event_time = event_datetime.strftime("%I:%M %p %Z")
         event_date = event_datetime.strftime("%m/%d/%y")
@@ -183,7 +185,9 @@ class Event:
         return "~~" + embed_text + "~~"
 
     def __format_datetime(self, date, time):
-        # date formatting
+        # validating date formatting
+        if "/" not in date:
+            return None
         date_split = date.strip().split("/")
         event_month = date_split[0].strip().zfill(2)
         event_day = date_split[1].strip().zfill(2)
@@ -192,25 +196,39 @@ class Event:
             event_year = date_split[2]
             if len(event_year) == 2:
                 event_year = "20" + event_year
-        event_date_input = event_month + "/" + event_day + "/" + str(event_year)
 
-        # time formatting
-        if ":" in time:
-            time_split = time.strip().split(":", 1)
-            event_hour = time_split[0].strip().zfill(2)
-            event_minute = time_split[1][:-2].strip().zfill(2)
-            event_meridiem = time_split[1][-2:].strip()
-        else:
-            event_hour = time.upper().replace("AM","").replace("PM","").strip().zfill(2) #time.strip()[1][:-2].strip().zfill(2)
-            event_minute = "00"
-            event_meridiem = time.strip()[-2:]
-        if event_meridiem.upper() != "PM":
-            event_meridiem = "AM"
-        event_time_input = event_hour + ":" + event_minute + " " + event_meridiem
+        # validating datetime value type
+        try:
+            # validating month and day
+            if not (1 <= int(event_month) <= 12 or 1 <= int(event_day) <= 31):
+                return None
+            event_date_input = event_month + "/" + event_day + "/" + str(event_year)
 
-        # convert to datetime
-        event_datetime = event_date_input + " " + event_time_input
-        event_datetime = datetime.strptime(event_datetime, "%m/%d/%Y %I:%M %p").astimezone(timezone('US/Pacific'))
+            # time formatting
+            if ":" in time:
+                time_split = time.strip().split(":", 1)
+                event_hour = time_split[0].strip().zfill(2)
+                event_minute = time_split[1][:-2].strip().zfill(2)
+                event_meridiem = time_split[1][-2:].strip()
+            else:
+                event_hour = time.upper().replace("AM","").replace("PM","").strip().zfill(2) #time.strip()[1][:-2].strip().zfill(2)
+                event_minute = "00"
+                event_meridiem = time.strip()[-2:]
+
+            if event_meridiem.upper() != "PM":
+                event_meridiem = "AM"
+            event_time_input = event_hour + ":" + event_minute + " " + event_meridiem
+
+            # validating time
+            if not (1 <= int(event_hour) <= 12 or 0 <= int(event_minute) <= 59):
+                return None
+
+            # convert to datetime
+            event_datetime = event_date_input + " " + event_time_input
+
+            event_datetime = datetime.strptime(event_datetime, "%m/%d/%Y %I:%M %p").astimezone(timezone('US/Pacific'))
+        except ValueError:
+            return None
 
         return event_datetime
 

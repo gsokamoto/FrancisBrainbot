@@ -1,4 +1,5 @@
 import discord
+import traceback
 from discord.ext import commands
 from typing import Optional
 from discord import app_commands
@@ -129,8 +130,14 @@ def run_discord_bot():
         curr_message = await interaction.original_response()
         botTools.sql_update_add_attendee(str(curr_message.id), str(interaction.user.id), 1)
         curr_event = Event(curr_message.id, title, description, date, time, location, locationurl, [str(interaction.user.id)])
-        await curr_message.edit(embed=await curr_event.generate_event_embed(interaction), view=PersistentView())
+        new_embed = await curr_event.generate_event_embed(interaction)
+        if new_embed is None:
+            await curr_message.edit(content="Error: Invalid date or time\nDeleting in 10 seconds", delete_after=10.0)
+            raise ValueError
+        else:
+            await curr_message.edit(embed=new_embed, view=PersistentView())
         botTools.sql_set_event(curr_event.message_id, curr_event.title, curr_event.description, curr_event.date, curr_event.time, curr_event.location, curr_event.locationurl)
+
 
     # edits existing event embed message
     @client.tree.command(name="edit_event", description="edits existing embed message for specified event")
@@ -145,12 +152,20 @@ def run_discord_bot():
     async def edit_event(interaction: discord.Interaction, message_id: str, title: Optional[str] = None, description: Optional[str]= None,
                          date: Optional[str] = None, time: Optional[str] = None, location: Optional[str] = None, locationurl: Optional[str] = None):
         message_id = message_id.strip()
-        curr_message = await interaction.channel.fetch_message(int(message_id))
-        db_query = botTools.sql_get_event(message_id)
-        curr_event = botTools.generate_event(db_query)
 
-        await curr_message.edit(embed= await curr_event.generate_event_embed(interaction, message_id=message_id, title=title, description=description,
-                                date=date, time=time, location=location, locationurl=locationurl, attendees=botTools.sql_get_attendees_list(message_id)))
+        db_query = botTools.sql_get_event(message_id)
+
+        if not db_query:
+            await interaction.response.send_message(content="Error: Invalid event id", ephemeral=True)
+            raise IndexError
+        curr_event = botTools.generate_event(db_query)
+        new_embed = await curr_event.generate_event_embed(interaction, message_id=message_id, title=title, description=description,
+                                date=date, time=time, location=location, locationurl=locationurl, attendees=botTools.sql_get_attendees_list(message_id))
+        if new_embed is None:
+            await interaction.response.send_message(content="Error: Invalid date or time", ephemeral=True)
+            raise ValueError
+        curr_message = await interaction.channel.fetch_message(int(message_id))
+        await curr_message.edit(embed=new_embed)
         botTools.sql_update_event(curr_event.message_id, curr_event.title, curr_event.description, curr_event.date,
                                curr_event.time, curr_event.location, curr_event.locationurl)
         await interaction.response.send_message(content="event " + str(message_id) + " was updated successfully.", ephemeral=True)
@@ -160,19 +175,38 @@ def run_discord_bot():
     # @app_commands.checks.has_any_role("Admin", "Moderator")
     @app_commands.describe(message_id="EVENT ID")
     async def complete_event(interaction: discord.Interaction, message_id: str):
-        try:
-            message_id = message_id.strip()
-            curr_message = await interaction.channel.fetch_message(int(message_id))
-            botTools.sql_update_complete_event(message_id.strip())
-            db_query = botTools.sql_get_event(message_id)
-            curr_event = botTools.generate_event(db_query)
+        message_id = message_id.strip()
+        if not botTools.sql_get_event(message_id=message_id):
+            await interaction.response.send_message(content="Error: Invalid event id", ephemeral=True)
+            raise IndexError
+        curr_message = await interaction.channel.fetch_message(int(message_id))
+        botTools.sql_update_complete_event(message_id)
+        db_query = botTools.sql_get_event(message_id)
+        curr_event = botTools.generate_event(db_query)
 
-            await curr_message.edit(embed= await curr_event.generate_event_embed(interaction, message_id=db_query[0][0], title=db_query[0][1], description=db_query[0][2],
-                                    date=db_query[0][3], time=db_query[0][4], location=db_query[0][5], locationurl=db_query[0][6], completed_flag=db_query[0][7], attendees=botTools.sql_get_attendees_list(message_id)),
-                                    view=None)
-            await interaction.response.send_message(content="event " + str(message_id) + " was completed successfully.",
-                                                    ephemeral=True)
-        except ValueError:
-            await interaction.response.send_message(content="That's not an event number. Baka.")
+        await curr_message.edit(embed= await curr_event.generate_event_embed(interaction, message_id=db_query[0][0], title=db_query[0][1], description=db_query[0][2],
+                                date=db_query[0][3], time=db_query[0][4], location=db_query[0][5], locationurl=db_query[0][6], completed_flag=db_query[0][7], attendees=botTools.sql_get_attendees_list(message_id)),
+                                view=None)
+        await interaction.response.send_message(content="event " + str(message_id) + " was completed successfully.",
+                                                ephemeral=True)
+            # await interaction.response.send_message(content="That's not an event number. Baka.")
+
+
+    # @client.tree.error
+    # async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    #     # embed = discord.Embed(title="Error")
+    #     # Handle all app command errors
+    #     if isinstance(error, discord.app_commands.MissingPermissions):
+    #         await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+    #     if isinstance(error, discord.app_commands.CommandInvokeError):
+    #         await interaction.response.send_message("Invalid Input", ephemeral=True)
+    #     else:
+    #         await interaction.response.send_message("Unexpected Error", ephemeral=True)
+
+        # else:
+        #     # error_data = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+        #     embed.description = "Unknown error" #\n```py\n{error_data[:1000]}\n```"
+        # await interaction.response.send_message(embed=embed)
+
 
     client.run(os.environ['DISCORD_TOKEN'])
