@@ -1,8 +1,10 @@
 import discord
-from datetime import datetime
 import calendar
-from pytz import timezone
 import sqlite3
+
+from urllib.parse import urlparse
+from pytz import timezone
+from datetime import datetime
 
 
 class Event:
@@ -24,7 +26,16 @@ class Event:
 
 
     # description: generates the event embed
-    # parameters: client(client): discord client object being used,
+    # parameters: curr_interaction (discord.interaction): the current discord interaction,
+    #             message_id (str): new message id,
+    #             title (str): new title,
+    #             description (str): new description,
+    #             date (str): new date,
+    #             time (str): new time,
+    #             location (str): new location,
+    #             locationurl (str): new location URL,
+    #             attendees (list): list of attendees as discord.user_id (str),
+    #             completed_flag (int): new completed flag
     # return: embed
     async def generate_event_embed(self, curr_interaction, message_id=None, title=None, description=None, date=None, time=None, location=None, locationurl=None, attendees=None, completed_flag=None):
         if message_id is None:
@@ -64,6 +75,7 @@ class Event:
         else:
             self.completed_flag = completed_flag
 
+
         description = description.replace("\\n", "\n")
 
         self.embed = discord.Embed(
@@ -81,6 +93,8 @@ class Event:
         event_count = len(attendees)
 
         attendee_display_names = await self.__ids_to_display_names(curr_interaction)
+        if not self.is_valid_url(locationurl):
+            locationurl = ""
 
         self.embed.add_field(name="Date:", value=event_date, inline=True)
         self.embed.add_field(name="Time:", value=event_time, inline=True)
@@ -89,10 +103,7 @@ class Event:
             self.embed.add_field(name="Location:", value=f"{location}")
         else:
             self.embed.add_field(name="Location:", value=f"[{location}]({locationurl})")
-        # self.embed.add_field(name="Location:", value=f"[{self.locationurl}]({self.location})")
-        # self.embed.add_field(name=f"[Location:] ({self.locationurl})", value=self.location, inline=True)
         self.embed.add_field(name=f"Attendees: ({event_count})", value="\n".join(attendee_display_names), inline=False)
-        # self.embed.add_field(name="Event ID:", value=self.message_id, inline=True)
         self.embed.set_footer(text="Event ID: " + str(message_id))
         if completed_flag == 1:
             self.embed.title = self.__crossout_embed(self.embed.title)
@@ -100,90 +111,18 @@ class Event:
             for idx, field in enumerate(self.embed.fields):
                 self.embed.set_field_at(index=idx, name=field.name, value=self.__crossout_embed(field.value))
 
-        # tank_emoji = botTools.generate_emoji(client, "tank")
-        # self.embed.add_field(name=f"{tank_emoji} TANK({len(self.tank_list)})", value="\n".join(self.tank_list), inline=True)
-        # dps_emoji = botTools.generate_emoji(client, "dps")
-        # self.embed.add_field(name=f"{dps_emoji} DPS({len(self.dps_list)})", value="\n".join(self.dps_list), inline=True)
-        # healer_emoji = botTools.generate_emoji(client, "healer")
-        # self.embed.add_field(name=f"{healer_emoji} HEALER({len(self.healer_list)})", value="\n".join(self.healer_list), inline=True)
-
         return self.embed
 
-    # def generate_event_embed(self, message_id, title, description, date, time, location, locationurl):
-    #     self.embed = discord.Embed(
-    #         title=self.title,
-    #         description=self.description,
-    #         color=discord.Color.green(),
-    #     )
-    #
-    #     self.title = title
-    #     self.description = description
-    #     self.date = date
-    #     self.time = time
-    #     self.location = location
-    #     self.locationurl = locationurl
-    #
-    #     event_datetime = self.__format_datetime()
-    #     event_relative_datetime = calendar.timegm(event_datetime.utctimetuple())
-    #     event_time = event_datetime.strftime("%I:%M %p %Z")
-    #     event_date = event_datetime.strftime("%m/%d/%y")
-    #     event_count = len(self.attendees)
-    #
-    #     self.embed.add_field(name="Date:", value=event_date, inline=True)
-    #     self.embed.add_field(name="Time:", value=event_time, inline=True)
-    #     self.embed.add_field(name="Countdown:", value=f"<t:{event_relative_datetime}:R>", inline=True)
-    #
-    #     self.embed.add_field(name="Location:", value=self.location, inline=True)
-    #     self.embed.add_field(name=f"Attendees: ({event_count})", value="\n".join(self.attendees), inline=False)
-    #     self.embed.set_footer(text="Event ID: " + str(message_id))
-    #
-    #     # tank_emoji = botTools.generate_emoji(client, "tank")
-    #     # self.embed.add_field(name=f"{tank_emoji} TANK({len(self.tank_list)})", value="\n".join(self.tank_list), inline=True)
-    #     # dps_emoji = botTools.generate_emoji(client, "dps")
-    #     # self.embed.add_field(name=f"{dps_emoji} DPS({len(self.dps_list)})", value="\n".join(self.dps_list), inline=True)
-    #     # healer_emoji = botTools.generate_emoji(client, "healer")
-    #     # self.embed.add_field(name=f"{healer_emoji} HEALER({len(self.healer_list)})", value="\n".join(self.healer_list), inline=True)
-    #
-    #     return self.embed
-
-    # description: adds annotations to embed that marks the raid as completed
-    # parameters: client(client): discord client object being used,
-    #             parse_link(str): post parse link for player reference
-    # return: embed
-    def completed_raid(self, parse_link=None):
-        if self.embed is not None:
-            self.embed.title = self.title + "(Completed)"
-            if parse_link is not None:
-                self.embed.add_field(name="PARSES", value=f"[click here to see this raid's parses]({parse_link})", inline=False)
-        return self.embed
-
-
-
-    # description: removes user from the raid list
-    # parameters: display_name(str): display name of user
-    # return: none
-
-    def remove_from_raid(self, display_name):
-        self.attendees.remove(display_name)
-
-    def add_to_event(self, display_name):
-        # self.tank_list = [x for x in self.tank_list if display_name not in x]
-        # self.dps_list = [x for x in self.dps_list if display_name not in x]
-        # self.healer_list = [x for x in self.healer_list if display_name not in x]
-        # for member in self.members_list:
-        #     if member.display_name is display_name:
-        #         self.members_list.remove(member)
-        self.attendees.append(display_name)
-
+    # description: adds cross out discord annotation
+    # parameters: embed_text(str): the string to be modified,
+    # return: str
     def __crossout_embed(self, embed_text):
-        # self.tank_list = [x for x in self.tank_list if display_name not in x]
-        # self.dps_list = [x for x in self.dps_list if display_name not in x]
-        # self.healer_list = [x for x in self.healer_list if display_name not in x]
-        # for member in self.members_list:
-        #     if member.display_name is display_name:
-        #         self.members_list.remove(member)
         return "~~" + embed_text + "~~"
 
+    # description: formats the date and time input to be used as datetime
+    # parameters: date(str): the date as a string,
+    #             time(str): the time as a string
+    # return: datetime
     def __format_datetime(self, date, time):
         # validating date formatting
         if "/" not in date:
@@ -232,6 +171,9 @@ class Event:
 
         return event_datetime
 
+    # description: converts tuple of attendees into a list with icons to be displayed on embed
+    # parameters: curr_interaction(discord.interaction): the current discord interaction,
+    # return: list
     async def __ids_to_display_names(self, curr_interaction):
         attendee_name_list = []
         for attendee_id in self.attendees:
@@ -258,3 +200,12 @@ class Event:
                     attendee_name_list.append(curr_display_name)
         return attendee_name_list
 
+    # description: validates URL
+    # parameters: url (str): the url to be validated
+    # return: bool
+    def is_valid_url(self, url):
+        try:
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except ValueError:
+            return False

@@ -1,9 +1,10 @@
 import discord
-import traceback
+
 from discord.ext import commands
 from typing import Optional
 from discord import app_commands
 from dotenv import load_dotenv
+
 
 
 import botTools
@@ -25,66 +26,73 @@ def run_discord_bot():
         @discord.ui.button(label="Attending", style=discord.ButtonStyle.green, emoji="🏃",
                            custom_id='FrancisBrainbot:green')
         async def attending_button_callback(self, interaction: discord.Interaction, button: discord.ui.button):
-            try:
-                db_query = botTools.sql_get_event(message_id=str(interaction.message.id))
-                db_query2 = botTools.sql_get_attendees(str(interaction.message.id))
-                for attendee in db_query2:
-                    if attendee[0] == str(interaction.user.id):
-                        if attendee[2] == 0:
-                            raise sqlite3.IntegrityError()
-                        elif attendee[2] == 1:
-                            botTools.sql_update_attendee_to_going(interaction.message.id, interaction.user.id)
-                            break
-                else:
-                    botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 0)
 
-                curr_event = botTools.generate_event(db_query)
+            db_query = botTools.sql_get_event(message_id=str(interaction.message.id))
+            db_query2 = botTools.sql_get_attendees(str(interaction.message.id))
+            for attendee in db_query2:
+                if attendee[0] == str(interaction.user.id):
+                    if attendee[2] == 0 or attendee[1] == 1:
+                        await interaction.response.send_message(content="You're already going!",
+                                                                ephemeral=True)
+                        raise sqlite3.IntegrityError("Error: User is already going. Cannot add duplicates to attendees table")
+                    elif attendee[2] == 1:
+                        botTools.sql_update_attendee_to_going(interaction.message.id, interaction.user.id)
+                        break
+            else:
+                botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 0)
+
+            curr_event = botTools.generate_event(db_query)
 
 
-                await interaction.message.edit(
-                    embed=await botTools.regenerate_embed(interaction, curr_event, db_query, str(interaction.user.id)),
-                    view=PersistentView())
-                await interaction.response.send_message(content="We'll see you there!", ephemeral=True)
-            except sqlite3.IntegrityError:
-                await interaction.response.send_message(content="You're already going!", ephemeral=True)
+            await interaction.message.edit(
+                embed=await botTools.regenerate_embed(interaction, curr_event, db_query),
+                view=PersistentView())
+            await interaction.response.send_message(content="We'll see you there!", ephemeral=True)
 
 
         @discord.ui.button(label="Tentative", style=discord.ButtonStyle.blurple, emoji="❓",
                            custom_id='FrancisBrainbot:blurple')
         async def tentative_button_callback(self, interaction: discord.Interaction, button: discord.ui.button):
-            try:
-                db_query = botTools.sql_get_event(message_id=str(interaction.message.id))
-                db_query2 = botTools.sql_get_attendees(str(interaction.message.id))
-                for attendee in db_query2:
-                    if attendee[0] == str(interaction.user.id):
-                        if attendee[2] == 1:
-                            raise sqlite3.IntegrityError()
-                        elif attendee[2] == 0:
-                            botTools.sql_update_attendee_to_tentative(interaction.message.id, interaction.user.id)
-                            break
-                else:
-                    botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 1)
+            db_query = botTools.sql_get_event(message_id=str(interaction.message.id))
+            db_query2 = botTools.sql_get_attendees(str(interaction.message.id))
+            for attendee in db_query2:
+                if attendee[0] == str(interaction.user.id):
+                    if attendee[1] == 1:
+                        await interaction.response.send_message(content="You have to go! You're the host!",
+                                                                ephemeral=True)
+                        raise sqlite3.IntegrityError("Error: User is host. Tentative_flag must stay 0")
+                    elif attendee[2] == 1:
+                        await interaction.response.send_message(content="You're already tentatively going!",
+                                                                ephemeral=True)
+                        raise sqlite3.IntegrityError("Error: Tentative_flag is already 1")
+                    elif attendee[2] == 0:
+                        botTools.sql_update_attendee_to_tentative(interaction.message.id, interaction.user.id)
+                        break
+                botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 1)
 
                 curr_event = botTools.generate_event(db_query)
 
 
                 await interaction.message.edit(
-                    embed=await botTools.regenerate_embed(interaction, curr_event, db_query, str(interaction.user.id)),
+                    embed=await botTools.regenerate_embed(interaction, curr_event, db_query),
                     view=PersistentView())
                 await interaction.response.send_message(content="Hoping you'll make it!", ephemeral=True)
-            except sqlite3.IntegrityError:
-                await interaction.response.send_message(content="You're already tentatively going!", ephemeral=True)
 
         @discord.ui.button(label="Not Going", style=discord.ButtonStyle.red, emoji="👻",
                            custom_id='FrancisBrainbot:red')
         async def not_going_button_callback(self, interaction: discord.Interaction, button: discord.ui.button):
-
+            # get host id to check if user is host
+            curr_event_host = botTools.sql_get_host(str(interaction.message.id))
+            if curr_event_host == str(interaction.user.id):
+                await interaction.response.send_message(content="You have to go! You're the host!",
+                                                        ephemeral=True)
+                raise sqlite3.IntegrityError("Error: Host cannot be removed from attendee table")
             botTools.sql_remove_attendee(str(interaction.message.id), str(interaction.user.id))
 
             db_query = botTools.sql_get_event(message_id=interaction.message.id)
             curr_event = botTools.generate_event(db_query)
 
-            await interaction.message.edit(embed=await botTools.regenerate_embed(interaction, curr_event, db_query, botTools.sql_get_attendees_list(interaction.message.id)),
+            await interaction.message.edit(embed=await botTools.regenerate_embed(interaction, curr_event, db_query),
                                            view=PersistentView())
             await interaction.response.send_message(content="We'll miss you!", ephemeral=True)
 
@@ -131,8 +139,8 @@ def run_discord_bot():
         botTools.sql_update_add_attendee(str(curr_message.id), str(interaction.user.id), 1)
         curr_event = Event(curr_message.id, title, description, date, time, location, locationurl, [str(interaction.user.id)])
         new_embed = await curr_event.generate_event_embed(interaction)
-        if new_embed is None:
-            await curr_message.edit(content="Error: Invalid date or time\nDeleting in 10 seconds", delete_after=10.0)
+        if new_embed is str:
+            await curr_message.edit(content=f"Error: {new_embed}\nDeleting in 10 seconds", delete_after=10.0)
             raise ValueError
         else:
             await curr_message.edit(embed=new_embed, view=PersistentView())
@@ -162,7 +170,7 @@ def run_discord_bot():
         new_embed = await curr_event.generate_event_embed(interaction, message_id=message_id, title=title, description=description,
                                 date=date, time=time, location=location, locationurl=locationurl, attendees=botTools.sql_get_attendees_list(message_id))
         if new_embed is None:
-            await interaction.response.send_message(content="Error: Invalid date or time", ephemeral=True)
+            await interaction.response.send_message(content=f"Error: Invalid date or time", ephemeral=True)
             raise ValueError
         curr_message = await interaction.channel.fetch_message(int(message_id))
         await curr_message.edit(embed=new_embed)
@@ -171,7 +179,7 @@ def run_discord_bot():
         await interaction.response.send_message(content="event " + str(message_id) + " was updated successfully.", ephemeral=True)
 
     # mark event as completed
-    @client.tree.command(name="complete_event", description="marks existing raid as completed and no longer becomes interactable")
+    @client.tree.command(name="complete_event", description="marks existing event as completed and no longer becomes interactable")
     # @app_commands.checks.has_any_role("Admin", "Moderator")
     @app_commands.describe(message_id="EVENT ID")
     async def complete_event(interaction: discord.Interaction, message_id: str):
@@ -189,24 +197,5 @@ def run_discord_bot():
                                 view=None)
         await interaction.response.send_message(content="event " + str(message_id) + " was completed successfully.",
                                                 ephemeral=True)
-            # await interaction.response.send_message(content="That's not an event number. Baka.")
-
-
-    # @client.tree.error
-    # async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    #     # embed = discord.Embed(title="Error")
-    #     # Handle all app command errors
-    #     if isinstance(error, discord.app_commands.MissingPermissions):
-    #         await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
-    #     if isinstance(error, discord.app_commands.CommandInvokeError):
-    #         await interaction.response.send_message("Invalid Input", ephemeral=True)
-    #     else:
-    #         await interaction.response.send_message("Unexpected Error", ephemeral=True)
-
-        # else:
-        #     # error_data = "".join(traceback.format_exception(type(error), error, error.__traceback__))
-        #     embed.description = "Unknown error" #\n```py\n{error_data[:1000]}\n```"
-        # await interaction.response.send_message(embed=embed)
-
 
     client.run(os.environ['DISCORD_TOKEN'])
