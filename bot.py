@@ -18,7 +18,7 @@ def run_discord_bot():
     # global variables
     load_dotenv()
     client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
-    events_channel_id = 1375613644552933376
+    events_channel_id = 1018371752709083156
     tz_pacific = pytz.timezone("US/Pacific")
 
     # contains all persistent buttons to be used in the program
