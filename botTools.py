@@ -124,6 +124,23 @@ def sql_get_upcoming_events():
     conn.close()
     return db_query
 
+# description: deletes event from all necessary tables
+# parameters: message_id (str): existing event/message id,
+def sql_remove_event(message_id):
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM events "
+        "WHERE message_id = ?",
+        (message_id,))
+    conn.commit()
+    cursor.execute(
+        "DELETE FROM attendees "
+        "WHERE message_id = ?",
+        (message_id,))
+    conn.commit()
+    conn.close()
+
 # description: gets all attendees of specified event as tuple
 # parameters: message_id (str): existing event/message id,
 # return: tuple
@@ -206,8 +223,8 @@ def sql_add_user(user_id):
     conn.commit()
     conn.close()
 
-# description: adds a new user who wants notifications to users table
-# parameters: user_id (str): user id for new user,
+# description: removes a new user who no longer wants notifications from users table
+# parameters: user_id (str): user id of existing user,
 def sql_remove_user(user_id):
     conn = sqlite3.connect("events.db")
     cursor = conn.cursor()

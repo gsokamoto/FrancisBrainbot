@@ -226,6 +226,22 @@ def run_discord_bot():
         await interaction.response.send_message(content="event " + str(message_id) + " was completed successfully.",
                                                 ephemeral=True)
 
+    # delete event message and from db
+    @client.tree.command(name="delete_event", description="marks existing event as completed and no longer becomes interactable")
+    @is_allowed_channel_hangouts()
+    @app_commands.checks.has_any_role("Not Weird", "Broke Boy", "Stinky Smell Boy", "Saturn's Onion Rings", "Battlepass")
+    @app_commands.describe(message_id="EVENT ID")
+    async def delete_event(interaction: discord.Interaction, message_id: str):
+        message_id = message_id.strip()
+        if not botTools.sql_get_event(message_id=message_id):
+            await interaction.response.send_message(content="Error: Invalid event id", ephemeral=True)
+            raise IndexError
+        curr_message = await interaction.channel.fetch_message(int(message_id))
+        botTools.sql_remove_event(message_id)
+        await curr_message.delete()
+        await interaction.response.send_message(content="event " + str(message_id) + " was successfully deleted.",
+                                                ephemeral=True)
+
     # enable notifications
     @client.tree.command(name="enable_notifications",
                          description="get DM notifications from FrancisBrainbot")
@@ -276,7 +292,6 @@ def run_discord_bot():
                 curr_message = await curr_channel.fetch_message(int(event.message_id))
                 await curr_user.send(content=f">>> Don't forget about to mark the following event as completed: {curr_message.jump_url}\n"
                                              f"Copy and paste `/complete_event message_id:{event.message_id}` into the following channel: {curr_channel.mention}")
-        # don't forget the remind the host to delete the event here
 
     # custom exceptions
     class InvalidChannelException(Exception):
