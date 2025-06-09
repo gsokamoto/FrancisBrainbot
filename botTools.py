@@ -110,6 +110,20 @@ def sql_update_complete_event(message_id):
     conn.commit()
     conn.close()
 
+# description: gets fields of existing event
+# parameters: message_id (str): existing event/message id,
+# return: tuple
+def sql_get_upcoming_events():
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT message_id, title, descr, date, time, location, location_url, completed_flag "
+        "FROM events "
+        "WHERE completed_flag = 0")
+    db_query = cursor.fetchall()
+    conn.close()
+    return db_query
+
 # description: gets all attendees of specified event as tuple
 # parameters: message_id (str): existing event/message id,
 # return: tuple
@@ -153,7 +167,7 @@ def sql_remove_attendee(message_id, user_id):
 # description: gets the host of the current event
 # parameters: message_id (str): existing event/message id,
 #             user_id (str): user_id of existing attendee,
-# return str
+# return: str
 def sql_get_host(message_id):
     conn = sqlite3.connect("events.db")
     cursor = conn.cursor()
@@ -165,6 +179,44 @@ def sql_get_host(message_id):
     db_query = cursor.fetchall()
     conn.close()
     return db_query[0][0]
+
+# description: gets a list of all users who wants notifications
+# parameters: message_id (str): existing event/message id,
+#             user_id (str): user_id of existing attendee,
+# return: tuple
+def sql_get_users():
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT user_id "
+        "FROM users ")
+    db_query = cursor.fetchall()
+    conn.close()
+    return db_query
+
+# description: adds a new user who wants notifications to users table
+# parameters: user_id (str): user id for new user,
+def sql_add_user(user_id):
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO users (user_id) "
+        "VALUES (?)",
+        (user_id,))
+    conn.commit()
+    conn.close()
+
+# description: adds a new user who wants notifications to users table
+# parameters: user_id (str): user id for new user,
+def sql_remove_user(user_id):
+    conn = sqlite3.connect("events.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM users "
+        "WHERE user_id = ?",
+        (user_id,))
+    conn.commit()
+    conn.close()
 
 # description: generates new embed using sql query to replace new values
 # parameters: interaction (discord.interaction): current discord interaction
@@ -183,4 +235,10 @@ def regenerate_embed(interaction, curr_event, db_query):
 # return: Event
 def generate_event(db_query):
     return Event(message_id=db_query[0][0], title=db_query[0][1], description=db_query[0][2], date=db_query[0][3], time=db_query[0][4], location=db_query[0][5], locationurl=db_query[0][6])
+
+# description: generates new event using sql query as list
+# parameters: db_query_list (list): sql query with all the values to be used for event,
+# return: Event
+def generate_event_with_list(db_query_list):
+    return Event(message_id=db_query_list[0], title=db_query_list[1], description=db_query_list[2], date=db_query_list[3], time=db_query_list[4], location=db_query_list[5], locationurl=db_query_list[6])
 

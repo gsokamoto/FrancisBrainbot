@@ -19,7 +19,7 @@ class Event:
         self.locationurl = locationurl
         self.completed_flag = completed_flag
 
-        self.message = None
+        self.datetime = self.__format_datetime(date, time)
         self.embed = None
 
         super().__init__()
@@ -84,12 +84,11 @@ class Event:
             color=discord.Color.green(),
         )
 
-        event_datetime = self.__format_datetime(date, time)
-        if event_datetime is None:
+        if self.datetime is None:
             return None
-        event_relative_datetime = calendar.timegm(event_datetime.utctimetuple())
-        event_time = event_datetime.strftime("%I:%M %p %Z")
-        event_date = event_datetime.strftime("%m/%d/%y")
+        event_relative_datetime = calendar.timegm(self.datetime.utctimetuple())
+        event_time = self.datetime.strftime("%I:%M %p %Z")
+        event_date = self.datetime.strftime("%m/%d/%y")
         event_count = len(attendees)
 
         attendee_display_names = await self.__ids_to_display_names(curr_interaction)
@@ -209,3 +208,12 @@ class Event:
             return all([result.scheme, result.netloc])
         except ValueError:
             return False
+
+    # description: validates URL
+    # parameters: url (str): the url to be validated
+    # return: bool
+    def get_formatted_datetime(self):
+        if datetime is not None:
+            return self.datetime.strftime("%m/%d/%y %I:%M %p %Z")
+        else:
+            return None

@@ -1,10 +1,11 @@
 import discord
+import pytz
 
-from discord.ext import commands
+from discord.ext import commands, tasks
 from typing import Optional
 from discord import app_commands
 from dotenv import load_dotenv
-
+from datetime import datetime, timedelta
 
 
 import botTools
@@ -17,6 +18,8 @@ def run_discord_bot():
     # global variables
     load_dotenv()
     client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+    events_channel_id = 1375613644552933376
+    tz_pacific = pytz.timezone("US/Pacific")
 
     # contains all persistent buttons to be used in the program
     class PersistentView(discord.ui.View):
@@ -118,12 +121,26 @@ def run_discord_bot():
     async def on_ready():
         # Setting 'Playing ' status
         await client.change_presence(activity=discord.Game(name=f"League of Legends"))
+        if not upcoming_event_notification.is_running():
+            upcoming_event_notification.start()
         synced = await client.tree.sync()
         print(str(len(synced)) + " synced")
+
+
+    # list of channels that have access to this function
+    def is_allowed_channel_hangouts():
+        async def predicate(interaction: discord.Interaction):
+            if interaction.channel.id not in [events_channel_id]:
+                await interaction.response.send_message(content=f"Error: You cannot use this bot in this channel. Try again in {interaction.client.get_channel(1018371752709083156).name}.", ephemeral=True)
+                raise InvalidChannelException("Error: The bot was called in an invalid channel")
+            else:
+                return True
+        return app_commands.check(predicate)
 
     # sends event embed message
     @client.tree.command(name="create_event", description="creates a new embed message for an event")
     # @app_commands.checks.has_any_role("Admin", "Moderator")
+    @is_allowed_channel_hangouts()
     @app_commands.describe(title="Event name/title")
     @app_commands.describe(description="What are we doing?")
     @app_commands.describe(date="M/D Format")
@@ -139,6 +156,7 @@ def run_discord_bot():
         botTools.sql_update_add_attendee(str(curr_message.id), str(interaction.user.id), 1)
         curr_event = Event(curr_message.id, title, description, date, time, location, locationurl, [str(interaction.user.id)])
         new_embed = await curr_event.generate_event_embed(interaction)
+
         if new_embed is str:
             await curr_message.edit(content=f"Error: {new_embed}\nDeleting in 10 seconds", delete_after=10.0)
             raise ValueError
@@ -146,9 +164,17 @@ def run_discord_bot():
             await curr_message.edit(embed=new_embed, view=PersistentView())
         botTools.sql_set_event(curr_event.message_id, curr_event.title, curr_event.description, curr_event.date, curr_event.time, curr_event.location, curr_event.locationurl)
 
+        db_query = botTools.sql_get_users()
+        for user in db_query[0]:
+            curr_user = await interaction.client.fetch_user(int(user))
+            await curr_user.send(content=f">>> {interaction.user.display_name} created a new event!!!\n"
+                                         f"Check it out here: {curr_message.jump_url}")
+        # await curr_message.jump_url
+
 
     # edits existing event embed message
     @client.tree.command(name="edit_event", description="edits existing embed message for specified event")
+    @is_allowed_channel_hangouts()
     # @app_commands.checks.has_any_role("Admin", "Moderator")
     @app_commands.describe(message_id="EVENT ID")
     @app_commands.describe(title="Event name/title")
@@ -178,8 +204,10 @@ def run_discord_bot():
                                curr_event.time, curr_event.location, curr_event.locationurl)
         await interaction.response.send_message(content="event " + str(message_id) + " was updated successfully.", ephemeral=True)
 
+
     # mark event as completed
     @client.tree.command(name="complete_event", description="marks existing event as completed and no longer becomes interactable")
+    @is_allowed_channel_hangouts()
     # @app_commands.checks.has_any_role("Admin", "Moderator")
     @app_commands.describe(message_id="EVENT ID")
     async def complete_event(interaction: discord.Interaction, message_id: str):
@@ -197,5 +225,61 @@ def run_discord_bot():
                                 view=None)
         await interaction.response.send_message(content="event " + str(message_id) + " was completed successfully.",
                                                 ephemeral=True)
+
+    # enable notifications
+    @client.tree.command(name="enable_notifications",
+                         description="get DM notifications from FrancisBrainbot")
+    # @is_allowed_channel_hangouts()
+    # @app_commands.checks.has_any_role("Admin", "Moderator")
+    async def enable_notifications(interaction: discord.Interaction):
+        if str(interaction.user.id) in botTools.sql_get_users():
+            await interaction.response.send_message(content="Error: You have already signed up.", ephemeral=True)
+            raise IndexError
+        botTools.sql_add_user(str(interaction.user.id))
+        await interaction.response.send_message(content="You've successfully signed up.",
+                                                ephemeral=True)
+    # disable notifications
+    @client.tree.command(name="disable_notifications",
+                         description="no longer receive DOM notifications from FrancisBrainbot")
+    # @is_allowed_channel_hangouts()
+    # @app_commands.checks.has_any_role("Admin", "Moderator")
+    async def disable_notifications(interaction: discord.Interaction):
+        if str(interaction.user.id) not in botTools.sql_get_users():
+            await interaction.response.send_message(content="Error: You were not signed up to begin with.", ephemeral=True)
+            raise IndexError
+        botTools.sql_remove_user(str(interaction.user.id))
+        await interaction.response.send_message(content="You've successfully been removed.",
+                                                ephemeral=True)
+
+    # send notification if event is coming up through DM
+    @tasks.loop(hours=24.0)
+    async def upcoming_event_notification():
+        users_list = [query for query in botTools.sql_get_users()[0]]
+        event_list = []
+        for query in botTools.sql_get_upcoming_events():
+            event_list.append(botTools.generate_event_with_list(query))
+        for event in event_list:
+            now_aware = datetime.now(tz=tz_pacific)
+            notification_datetime = event.datetime - timedelta(days=1)
+            complete_event_reminder_datetime = event.datetime + timedelta(days=1)
+            if notification_datetime <= now_aware <= event.datetime:
+                intersecting_users = list(set(botTools.sql_get_attendees_list(event.message_id)).intersection(set(users_list)))
+                if intersecting_users:
+                    for user in intersecting_users:
+                        curr_user = await client.fetch_user(int(user))
+                        curr_channel = client.get_channel(events_channel_id)
+                        curr_message = await curr_channel.fetch_message(int(event.message_id))
+                        await curr_user.send(content=f">>> Don't forget about {event.title} at {event.get_formatted_datetime()}.\nMore details here: {curr_message.jump_url}")
+            elif now_aware >= complete_event_reminder_datetime:
+                curr_user = await client.fetch_user(botTools.sql_get_host(int(event.message_id)))
+                curr_channel = client.get_channel(events_channel_id)
+                curr_message = await curr_channel.fetch_message(int(event.message_id))
+                await curr_user.send(content=f">>> Don't forget about to mark the following event as completed: {curr_message.jump_url}\n"
+                                             f"Copy and paste `/complete_event message_id:{event.message_id}` into the following channel: {curr_channel.mention}")
+        # don't forget the remind the host to delete the event here
+
+    # custom exceptions
+    class InvalidChannelException(Exception):
+        pass
 
     client.run(os.environ['DISCORD_TOKEN'])
