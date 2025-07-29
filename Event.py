@@ -75,7 +75,6 @@ class Event:
         else:
             self.completed_flag = completed_flag
 
-
         description = description.replace("\\n", "\n")
 
         self.embed = discord.Embed(
@@ -86,6 +85,7 @@ class Event:
 
         if self.datetime is None:
             return None
+        self.datetime = self.__format_datetime(date, time)
         event_relative_datetime = calendar.timegm(self.datetime.utctimetuple())
         event_time = self.datetime.strftime("%I:%M %p %Z")
         event_date = self.datetime.strftime("%m/%d/%y")

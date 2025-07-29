@@ -18,7 +18,7 @@ def run_discord_bot():
     # global variables
     load_dotenv()
     client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
-    events_channel_id = 1018371752709083156
+    events_channel_id = 1375613644552933376
     tz_pacific = pytz.timezone("US/Pacific")
 
     # contains all persistent buttons to be used in the program
@@ -41,8 +41,8 @@ def run_discord_bot():
                     elif attendee[2] == 1:
                         botTools.sql_update_attendee_to_going(interaction.message.id, interaction.user.id)
                         break
-            else:
-                botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 0)
+                else:
+                    botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 0)
 
             curr_event = botTools.generate_event(db_query)
 

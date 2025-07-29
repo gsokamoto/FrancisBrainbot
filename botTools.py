@@ -28,14 +28,14 @@ def sql_set_event(message_id, description, title, date, time, location, location
 #             location (str): new event location,
 #             locationurl (str): new event location url
 #             completed_flag (int): new completed flag value
-def sql_update_event(message_id, description, title, date, time, location, locationurl, completed_flag):
+def sql_update_event(message_id, description, title, date, time, location, locationurl):
     conn = sqlite3.connect("events.db")
     cursor = conn.cursor()
     cursor.execute(
         "UPDATE events "
-        "SET title = ?, descr = ?, date = ?, time = ?, location = ?, location_url = ?, completed_flag = ? "
+        "SET title = ?, descr = ?, date = ?, time = ?, location = ?, location_url = ? "
         "WHERE message_id = ?",
-        (description, title, date, time, location, locationurl, message_id, completed_flag))
+        (description, title, date, time, location, locationurl, message_id))
     conn.commit()
     conn.close()
 
