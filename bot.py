@@ -165,8 +165,8 @@ def run_discord_bot():
         botTools.sql_set_event(curr_event.message_id, curr_event.title, curr_event.description, curr_event.date, curr_event.time, curr_event.location, curr_event.locationurl)
 
         db_query = botTools.sql_get_users()
-        for user in db_query[0]:
-            curr_user = await interaction.client.fetch_user(int(user))
+        for user in db_query:
+            curr_user = await interaction.client.fetch_user(int(user[0]))
             await curr_user.send(content=f">>> {interaction.user.display_name} created a new event!!!\n"
                                          f"Check it out here: {curr_message.jump_url}")
         # await curr_message.jump_url
