@@ -32,6 +32,7 @@ def run_discord_bot():
 
             db_query = botTools.sql_get_event(message_id=str(interaction.message.id))
             db_query2 = botTools.sql_get_attendees(str(interaction.message.id))
+            isAttending = False
             for attendee in db_query2:
                 if attendee[0] == str(interaction.user.id):
                     if attendee[2] == 0 or attendee[1] == 1:
@@ -39,13 +40,13 @@ def run_discord_bot():
                                                                 ephemeral=True)
                         raise sqlite3.IntegrityError("Error: User is already going. Cannot add duplicates to attendees table")
                     elif attendee[2] == 1:
+                        isAttending = True
                         botTools.sql_update_attendee_to_going(interaction.message.id, interaction.user.id)
                         break
-                else:
-                    botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 0)
+            if not isAttending:
+                botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 0)
 
             curr_event = botTools.generate_event(db_query)
-
 
             await interaction.message.edit(
                 embed=await botTools.regenerate_embed(interaction, curr_event, db_query),
