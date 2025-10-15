@@ -59,6 +59,7 @@ def run_discord_bot():
         async def tentative_button_callback(self, interaction: discord.Interaction, button: discord.ui.button):
             db_query = botTools.sql_get_event(message_id=str(interaction.message.id))
             db_query2 = botTools.sql_get_attendees(str(interaction.message.id))
+            isAttending = False
             for attendee in db_query2:
                 if attendee[0] == str(interaction.user.id):
                     if attendee[1] == 1:
@@ -71,16 +72,17 @@ def run_discord_bot():
                         raise sqlite3.IntegrityError("Error: Tentative_flag is already 1")
                     elif attendee[2] == 0:
                         botTools.sql_update_attendee_to_tentative(interaction.message.id, interaction.user.id)
+                        isAttending = True
                         break
+            if not isAttending:
                 botTools.sql_update_add_attendee(interaction.message.id, interaction.user.id, 0, 1)
 
-                curr_event = botTools.generate_event(db_query)
+            curr_event = botTools.generate_event(db_query)
 
-
-                await interaction.message.edit(
-                    embed=await botTools.regenerate_embed(interaction, curr_event, db_query),
-                    view=PersistentView())
-                await interaction.response.send_message(content="Hoping you'll make it!", ephemeral=True)
+            await interaction.message.edit(
+                embed=await botTools.regenerate_embed(interaction, curr_event, db_query),
+                view=PersistentView())
+            await interaction.response.send_message(content="Hoping you'll make it!", ephemeral=True)
 
         @discord.ui.button(label="Not Going", style=discord.ButtonStyle.red, emoji="👻",
                            custom_id='FrancisBrainbot:red')
